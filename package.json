@@ -1,0 +1,35 @@
+{
+  "name": "level-json-context",
+  "version": "0.0.0",
+  "description": "Use json-context with leveldb. Contexts are automatically generated from matchers, and provides ability to watch matchers for realtime notifications.",
+  "main": "level-context.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mmckegg/level-json-context"
+  },
+  "dependencies": {
+    "json-change-filter": "*",
+    "json-context": "*",
+    "map-reduce": "*"
+  },
+  "peerDependencies": {
+    "levelup": "*"
+  },
+  "keywords": [
+    "realtime",
+    "templates",
+    "data binding",
+    "query",
+    "leveldb",
+    "levelup",
+    "map"
+  ],
+  "author": "Matt McKegg",
+  "license": "MIT"
+}
