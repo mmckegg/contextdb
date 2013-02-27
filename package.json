@@ -14,12 +14,12 @@
     "url": "https://github.com/mmckegg/level-json-context"
   },
   "dependencies": {
-    "json-change-filter": "*",
-    "json-context": "*",
-    "map-reduce": "*"
+    "json-change-filter": "~0.1.0",
+    "json-context": "~0.1.0",
+    "map-reduce": "~2.1.6"
   },
   "peerDependencies": {
-    "levelup": "*"
+    "levelup": "~0.6.0"
   },
   "keywords": [
     "realtime",

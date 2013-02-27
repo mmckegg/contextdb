@@ -1,8 +1,7 @@
 var jsonContext = require('json-context')
 var mapReduce = require('map-reduce')
 
-var createChangeFilter = require('json-change-filter')
-var checkFilter = createChangeFilter.check
+var checkFilter = require('json-change-filter').check
 
 var async = require('async')
 var Bucket = require('range-bucket')
@@ -21,34 +20,17 @@ module.exports = function(db, options){
   var contextDB = new EventEmitter()
   contextDB.db = db
 
-  var changeFilter = createChangeFilter()
-
-  changeFilter.on('change', function(object, changeInfo){
-    if (changeInfo.action === 'update' || changeInfo.action === 'append'){
-      db.put(changeInfo.key, object)
-    } else if (changeInfo.action === 'remove'){
-      db.del(changeInfo.key)
-    }
-  })
-
-  contextDB.pushChange = function(object, changeInfo){
-    var key = objectBucket(object[options.primaryKey])
-    var originalMatcher = matcherLookup[changeInfo.matcherRef]
-
-    var matcher = getMatcherWithParams(originalMatcher, changeInfo.params)
-
-    if (key && matcher){
-      db.get(key, function(err, original){
-        changeFilter.pushChange(object, {
-          original: original,
-          matcher: matcher,
-          key: key,
-          source: changeInfo.source || 'user'
-        })
-      })
+  contextDB.applyChange = function(object, changeInfo){
+    changeInfo = changeInfo || {}
+    if (changeInfo.source != 'database'){
+      var key = objectBucket(object[options.primaryKey])
+      if (changeInfo.action === 'remove'){
+        db.del(key)
+      } else {
+        db.put(key, object)
+      }
     }
   }
-
 
   var matcherLookup = {}
   var matcherParamLookup = {}
@@ -60,7 +42,7 @@ module.exports = function(db, options){
   }
 
   options.matchers.forEach(function(matcher){
-    var paramifiedMatch = paramify(matcher.filter.match)
+    var paramifiedMatch = paramify(matcher.match)
     var map = getMapFromMatcher(matcher.ref, paramifiedMatch)
     db.mapReduce.add(map)
     matcherParamLookup[matcher.ref] = paramifiedMatch.params
@@ -89,33 +71,48 @@ module.exports = function(db, options){
     })
   })
 
-  contextDB.generate = function(params, matcherRefs, callback){
+  contextDB.generate = function(options, callback){
+
+    var params = options.params || {}
+    var matcherRefs = options.matcherRefs || []
+
     var matchers = matcherRefs.map(function(ref){ 
-      return mergeClone(matcherLookup[ref])
+      return matcherLookup[ref]
     })
     var context = jsonContext(params, {matchers: matchers})
+    var contextListeners = {}
+
+    context.destroy = function(){
+      Object.keys(contextListeners).forEach(function(key){
+        contextDB.unlisten(key, contextListeners[key].id)
+      })
+      contextListeners = null
+      context.emit('end')
+      context.removeAllListeners()
+    }
 
     async.eachSeries(matchers, function(matcher, done){
-      matcher.filter = getReplacedFilters(matcher.filter, context)
       var params = getParamsFrom(matcherParamLookup[matcher.ref], context)
       getAndPushItems(db, matcher, params, context, done)
+      contextListeners[matcher.ref] = contextDB.listen(matcher.ref, context, function(object, changeInfo){
+        context.pushChange(object, changeInfo)
+      })
     }, function(err){ if(err)return callback&&callback(err)
+      context.on('change', contextDB.applyChange)
       callback(null, context)
     })
   }
 
   var listeners = []
-  contextDB.listen = function(matcherRef, contextParams, listener){
+  contextDB.listen = function(matcherRef, context, listener){
     var view = views[matcherRef]
-    var params = matcherParamLookup[matcherRef]
-    if (view && params && listener){
-      params = params.map(function(param){
-        return contextParams[param.param]
-      })
-      listener.matcher = getMatcherWithParams(matcherLookup[matcherRef], contextParams)
+    if (view && listener){
+      var params = getParamsFrom(matcherParamLookup[matcherRef], context)
+      listener.matcher = matcherLookup[matcherRef]
       var key = getMatcherKeyFromView(view, params)
       listeners[key] = listeners[key] || []
-      return listeners[key].push(listener) - 1
+      listener.id = listeners[key].push(listener) - 1
+      return listener
     }
   }
 
@@ -136,37 +133,13 @@ function getLastKey(db, bucket){
 }
 
 function isMapKey(key){
-  return (key.slice(0, 6) === '\xFFmapr~')
+  return (typeof key == 'string' && key.slice(0, 6) === '\xFFmapr~')
 }
 
 function getMatcherKey(key){
   var splitPoint = key.lastIndexOf('\0')
   return key.slice(6, splitPoint)
 }
-
-function getMatcherWithParams(matcher, params){
-  params = params || {}
-  return mergeClone(matcher, {filter: getFilterWithParams(matcher.filter, params)})
-}
-
-function getFilterWithParams(filter, params){
-  var result = {}
-  Object.keys(filter).forEach(function(key){
-    var value = filter[key]
-    if (isParam(value)){
-      result[key] = params[value.$param]
-    } else {
-      if (filter[key] instanceof Object && !Array.isArray(value)){
-        result[key] = getFilterWithParams(value, params)
-      } else {
-        result[key] = value
-      }
-    }
-  })
-  return result
-}
-
-
 
 function parseMapKey(key){
   var groups = key.split('\0')
@@ -182,33 +155,20 @@ function getMatcherKeyFromView(view, params){
   return key.slice(6,-1)
 }
 
-function getReplacedFilters(filter, context){
-  var result = {}
-  Object.keys(filter).forEach(function(key){
-    var value = filter[key]
-    if (isParam(value)){
-      result[key] = context.get(value.$param)
-    } else {
-      result[key] = value
-    }
-  })
-  return result
-}
-
 function isParam(object){
-  return object instanceof Object && object.$param
-}
-
-function getParamsFrom(params, context){
-  return params.map(function(param){
-    return context.get(param.param)
-  })
+  return object instanceof Object && object.$query
 }
 
 function getAndPushItems(db, matcher, params, context, callback){
   db.map.view({name: matcher.ref, start: params.concat(''), tail: false}).on('data', function(data){
     context.pushChange(data.value, {matcher: matcher, source: 'database'})
   }).on('end', callback)
+}
+
+function getParamsFrom(params, context){
+  return params.map(function(param){
+    return context.get(param.query)
+  })
 }
 
 function paramify(match){
@@ -218,7 +178,7 @@ function paramify(match){
   Object.keys(match).sort().forEach(function(key){
     var value = match[key]
     if (isParam(value)){
-      params.push({key: key, param: value.$param})
+      params.push({key: key, query: value.$query})
     } else {
       ensure[key] = value
     }

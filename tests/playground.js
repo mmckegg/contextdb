@@ -14,48 +14,71 @@ var contextDB = levelContext(db, {
     { ref: 'items_for_parent',
       item: 'items[id={.id}]',
       collection: 'items',
-      filter: {
-        match: {
-          parent_id: {$param: 'parent_id'},
-          type: 'comment'
-        },
-        changes: true
+      match: {
+        parent_id: {$query: 'parent_id'},
+        type: 'comment'
+      },
+      allow: {
+        append: true,
+        update: true
       }
     }
   ]
 })
 
-contextDB.listen('items_for_parent', {parent_id: 1}, function(key, value){
-  console.log('>>>', key, value)
-})
 
-
-contextDB.pushChange({
+contextDB.applyChange({
   id: 1,
   parent_id: 'client',
   name: "Control Page",
   type: 'workpaper'
-}, {matcherRef: 'items_for_parent', params: {parent_id: 1}, source: 'user'})
-
-contextDB.pushChange({
-  id: 2,
-  parent_id: 1,
-  description: "I am a cool comment lol",
-  type: 'comment'
-}, {matcherRef: 'items_for_parent', source: 'user'})
-
-contextDB.db.once('queue:drain', function(){
-  contextDB.generate({parent_id: 1}, ['items_for_parent'], function(err, context){
-    console.log('context:', context)
-  })
 })
 
 
+contextDB.db.once('queue:drain', function(){
+  contextDB.generate({parent_id: 1}, ['items_for_parent'], function(err, context){
+    
+    context.on('change', function(object, changeInfo){
+      if (changeInfo.source == 'database'){
+        console.log('1: RECIEVED CHANGE')
+      } else {
+        console.log('1: LOCAL CHANGE')
+      }
+    })
+
+    setTimeout(function(){
+      var object = {
+        id: 2,
+        parent_id: 1,
+        description: "I am a cool comment lol",
+        type: 'comment'
+      }
+      context.pushChange(object, {source: 'user', onDeny: function(){
+        console.log('CHANGE DENIED!')
+      }})
+    }, 100)
+
+
+
+  })
+
+  contextDB.generate({parent_id: 1}, ['items_for_parent'], function(err, context){
+    
+    context.on('change', function(object, changeInfo){
+      if (changeInfo.source == 'database'){
+        console.log('2: RECIEVED CHANGE')
+      }
+      console.log(changeInfo)
+    })
+    
+  })
+})
+
 setTimeout(function(){
-  contextDB.pushChange({
+  contextDB.applyChange({
     id: 3,
     parent_id: 1,
     description: "I am another comment",
     type: 'comment'
-  }, {matcherRef: 'items_for_parent', params: {parent_id: 1}, source: 'user'})
+  })
 }, 1500)
