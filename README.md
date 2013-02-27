@@ -77,13 +77,13 @@ It will recieve live events from the database for all specified matchers until `
 var params = {parent_id: 1, user_id: 'user_123', token: 'some_unique_random_string'}
 var matcherRefs = ['current_user', 'items_for_parent']
 
-var contexts = {}
+var userDatasources = {}
 
 contextDB.generate(params, matcherRefs, function(err, datasource){
 
   // save the context for connecting to later
   // in production we'd want to auto destroy if no connection recieved
-  contexts[params.token] = datasource
+  userDatasources[params.token] = datasource
 
   // using realtime-templates
   renderer.render('page', datasource, function(err, html){
