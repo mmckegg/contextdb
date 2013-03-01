@@ -70,6 +70,9 @@ It will recieve live events from the database for all specified matchers until `
 
 `matcherRefs` is order sensitive as params can refer to the result of another matcher.
 
+### datasource.emitChangesSince(timestamp)
+
+Will cause the datasource to emit all changes to any listeners that have occured since the given timestamp (including deletions)
 
 ## Example
 
@@ -101,26 +104,24 @@ shoe(function (stream) {
   stream.once('data', function(data){
     var token = data.toString().trim()
     datasource = userDatasources[token]
+    console.log('LOGGING IN:', token)
     if (datasource){
-      stream.pipe(split()).on('data', function(data){
-        datasource.pushChange(JSON.parse(data), {source: 'user'})
-      })
-      datasource.on('change', function(object, changeInfo){
-        if (changeInfo.source === 'database'){
-          stream.write(safeStringify(object) + '\n')
-        }
-      })
+      stream.pipe(jsonContextStream(datasource, {
+        remoteSource: 'user',
+        localSource: 'database'
+      })).pipe(stream)
     } else {
       stream.close()
     }
   })
 
-  stream.on('end', function () {
+  stream.once('end', function () {
     if (datasource){
+      console.log("CLOSING:", datasource.data.token)
       datasource.destroy()
       userDatasources[datasource.data.token] = null
     }
-  });
+  })
 
 }).install(server, '/contexts')
 ```
@@ -128,16 +129,7 @@ shoe(function (stream) {
 And on the client:
 
 ```js
-var stream = shoe('/contexts');
-stream.pipe(split()).on('data', function(line){
-  // push the changed objects coming down the wire directly into the context
-  datasource.pushChange(JSON.parse(line), {source: 'server'})
-})
-stream.write(datasource.data.token + '\n')
-
-datasource.on('change', function(object, changeInfo){
-  if (changeInfo.source === 'user'){
-    stream.write(jsonContext.safeStringify(object) + '\n')
-  }
-})
+var stream = shoe('http://localhost:9999/contexts')
+stream.write(datasource.data.token + '\n') //log in
+stream.pipe(jsonContextStream(datasource)).pipe(stream)
 ```
