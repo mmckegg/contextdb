@@ -10,9 +10,11 @@ This module creates instances of **jsonContext** from a leveldb database using [
 Pass in an instance of a [levelup database](https://github.com/rvagg/node-levelup) and specify matchers. Ensure the database has `encoding: 'json'`. Returns an instance of *contextDB*
 
 Options:
-  **matchers**: Route changes into the correct places, and provide building blocks for page contexts. In addition to the [matcher options on JSON Context](https://github.com/mmckegg/json-context#matchers), you need to specify `matcher.ref` as well. Use `ref` to refer to this matcher later when building contexts. Placeholders can be specified anywhere in the matcher filter by using `{$param: 'queryToGetData'}`
-  **primaryKey**: Choose the object key to use as the primary index. Defaults to `'id'`. 
 
+- **matchers**: Route changes into the correct places, and provide building blocks for page contexts. In addition to the [matcher options on JSON Context](https://github.com/mmckegg/json-context#matchers), you need to specify `matcher.ref` as well. Use `ref` to refer to this matcher later when building contexts. Placeholders can be specified anywhere in the matcher filter by using `{$param: 'queryToGetData'}`
+- **primaryKey**: Choose the object key to use as the primary index. Defaults to `'id'`. 
+- **incrementingKey**: (defaults to '_seq') Add an incrementing ID to objects
+- **timestamps**: (defaults to `true`) whether to automatically add timestamps to edited objects `created_at`, `updated_at`, `deleted_at`. Required if using `datasource.emitChangesSince`.
 
 ```js
 var db = leveldb(__dirname + '/test-db', {
