@@ -68,6 +68,8 @@ Returns a **datasource** (instance of [JSON Context](https://github.com/mmckegg/
 
 It will recieve live events from the database for all specified matchers until `datasource.destroy()` is called.
 
+Changes pushed in using `datasource.pushChange` will be checked against matchers and if pass, applied to the database.
+
 `matcherRefs` is order sensitive as params can refer to the result of another matcher.
 
 ### datasource.emitChangesSince(timestamp)
