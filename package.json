@@ -16,10 +16,11 @@
   "dependencies": {
     "json-change-filter": "~0.1.0",
     "json-context": "~0.1.0",
-    "level-map": "~0.1.1"
+    "level-map": "~0.1.1",
+    "level-view-stream": "git://github.com/mmckegg/level-view-stream.git"
   },
   "peerDependencies": {
-    "levelup": "~0.6.0"
+    "levelup": "~0.6.1"
   },
   "keywords": [
     "realtime",
