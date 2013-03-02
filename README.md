@@ -1,7 +1,7 @@
 JSON Context - LevelDB
 ===
 
-This module creates instances of **jsonContext** from a leveldb database using [levelup](https://github.com/rvagg/node-levelup). [Contexts](https://github.com/mmckegg/json-context) are automatically generated from matchers, and provides ability to watch matchers for realtime notifications.
+This module creates instances of [**jsonContext**](https://github.com/mmckegg/json-context) from a leveldb database using [levelup](https://github.com/rvagg/node-levelup). Datasources are automatically generated from matchers and watch for realtime changes.
 
 ## API
 
@@ -48,7 +48,7 @@ var contextDB = levelContext(db, {
 
 ### contextDB.applyChange(object)
 
-Push objects into the database. This will also notify all relevant matcher listers. 
+Push objects into the database. This will also notify all relevant datasources listening. 
 
 All changes will be accepted so this should only be triggered by trusted sources.
 
@@ -68,7 +68,7 @@ contextDB.applyChange(newObject)
 
 Returns a **datasource** (instance of [JSON Context](https://github.com/mmckegg/json-context)) prepopulated with the relevent data as chosen by matchers and params.
 
-It will recieve live events from the database for all specified matchers until `datasource.destroy()` is called.
+It will recieve live events from the database for all specified matchers until **`datasource.destroy()`** is called.
 
 Changes pushed in using `datasource.pushChange` will be checked against matchers and if pass, applied to the database.
 
