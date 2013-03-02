@@ -16,7 +16,7 @@
   "dependencies": {
     "json-change-filter": "~0.1.0",
     "json-context": "~0.1.0",
-    "level-map": "~0.1.2",
+    "level-map": "~0.1.2"
   },
   "peerDependencies": {
     "levelup": "~0.6.1"
