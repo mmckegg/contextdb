@@ -1,7 +1,7 @@
-JSON Context - LevelDB
+ContextDB - JSON Context for LevelDB
 ===
 
-This module creates instances of [**jsonContext**](https://github.com/mmckegg/json-context) from a leveldb database using [levelup](https://github.com/rvagg/node-levelup). Datasources are automatically generated from matchers and watch for realtime changes.
+This module creates instances of [**JsonContext**](https://github.com/mmckegg/json-context) from a leveldb database using [levelup](https://github.com/rvagg/node-levelup). Datasources are automatically generated from matchers and watch for realtime changes.
 
 ## API
 
@@ -17,11 +17,14 @@ Options:
 - **timestamps**: (defaults to `true`) whether to automatically add timestamps to edited objects `created_at`, `updated_at`, `deleted_at`. Required if using `datasource.emitChangesSince`.
 
 ```js
-var db = leveldb(__dirname + '/test-db', {
+var LevelDB = require('levelup')
+var ContextDB = require('contextdb')
+
+var db = LevelDB(__dirname + '/test-db', {
   encoding: 'json'
 })
 
-var contextDB = levelContext(db, {
+var contextDB = ContextDB(db, {
   matchers: [
     { ref: 'items_for_parent',
       item: 'items[id={.id}]',
@@ -64,15 +67,18 @@ contextDB.applyChange(newObject)
 ```
 
 
-### contextDB.generate(params, matcherRefs, callback(err, datasource))
+### contextDB.generate(options, callback(err, datasource))
 
-Returns a **datasource** (instance of [JSON Context](https://github.com/mmckegg/json-context)) prepopulated with the relevent data as chosen by matchers and params.
+Returns a **datasource** (instance of [JSON Context](https://github.com/mmckegg/json-context)) prepopulated with the relevent data as chosen by matchers and starting data.
 
 It will recieve live events from the database for all specified matchers until **`datasource.destroy()`** is called.
 
 Changes pushed in using [`datasource.pushChange`](https://github.com/mmckegg/json-context#datasourcepushchangeobject-changeinfo) will be checked against matchers and if pass, applied to the database.
 
-`matcherRefs` is order sensitive as params can refer to the result of another matcher.
+Options:
+
+- **data**: The starting point for the datasource. Matchers can use $query to hook into the specified attributes.
+- **matcherRefs**: An array of refs from the matchers specified when creating the contextDB. This option is order sensitive as matchers can refer to the result of another matcher.
 
 ### datasource.emitChangesSince(timestamp)
 
@@ -102,7 +108,9 @@ contextDB.generate(params, matcherRefs, function(err, datasource){
 And handle the realtime connections:
 
 ```js
-shoe(function (stream) {
+var Shoe = require('shoe')
+
+Shoe(function (stream) {
   var datasource = null
 
   stream.once('data', function(data){
@@ -110,10 +118,7 @@ shoe(function (stream) {
     datasource = userDatasources[token]
     console.log('LOGGING IN:', token)
     if (datasource){
-      stream.pipe(jsonContextStream(datasource, {
-        remoteSource: 'user',
-        localSource: 'database'
-      })).pipe(stream)
+      stream.pipe(datasource.changeStream()).pipe(stream)
     } else {
       stream.close()
     }
@@ -133,7 +138,7 @@ shoe(function (stream) {
 And on the client:
 
 ```js
-var stream = shoe('http://localhost:9999/contexts')
+var stream = Shoe('http://localhost:9999/contexts')
 stream.write(datasource.data.token + '\n') //log in
-stream.pipe(jsonContextStream(datasource)).pipe(stream)
+stream.pipe(datasource.changeStream({verifiedChange: true})).pipe(stream)
 ```
