@@ -1,7 +1,7 @@
-var jsonContext = require('json-context')
-var levelMap = require('level-map')
+var JsonContext = require('json-context')
+var LevelMap = require('level-map')
 
-var checkFilter = require('json-change-filter').check
+var checkFilter = require('json-filter')
 
 var TimeoutMap = require('./timeout-map')
 
@@ -11,21 +11,21 @@ var EventEmitter = require("events").EventEmitter
 
 module.exports = function(db, options){
 
-  options = options || {}
+  var rootOptions = options || {}
 
   var deleted = TimeoutMap(3000)
 
-  var dataFilters = options.dataFilters
+  var dataFilters = rootOptions.dataFilters
 
-  options.primaryKey = options.primaryKey || 'id'
-  if (!options.hasOwnProperty('incrementingKey')){
-    options.incrementingKey = '_seq'
+  rootOptions.primaryKey = rootOptions.primaryKey || 'id'
+  if (!rootOptions.hasOwnProperty('incrementingKey')){
+    rootOptions.incrementingKey = '_seq'
   }
-  if (options.timestamps !== false){
-    options.timestamps = true
+  if (rootOptions.timestamps !== false){
+    rootOptions.timestamps = true
   }
 
-  levelMap(db)
+  LevelMap(db)
   db.queue.delay = 100
 
   var contextDB = new EventEmitter()
@@ -37,27 +37,27 @@ module.exports = function(db, options){
 
   // incrementing values
   var currentIncementValue = 0
-  if (options.incrementingKey){
-    db.get('\xFFincrement~' + options.incrementingKey, function(err, val){
+  if (rootOptions.incrementingKey){
+    db.get('\xFFincrement~' + rootOptions.incrementingKey, function(err, val){
       currentIncementValue = parseInt(val, 10) || 0
     })
   }
   function incrementKey(){
     currentIncementValue += 1
-    db.put('\xFFincrement~' + options.incrementingKey, currentIncementValue)
+    db.put('\xFFincrement~' + rootOptions.incrementingKey, currentIncementValue)
     return currentIncementValue
   }
 
   function getObjectKey(object){
-    if (options.incrementingKey){
-      var ref = parseInt(object[options.incrementingKey])
-      return padNumber(ref, 10) + ':' + object[options.primaryKey]
+    if (rootOptions.incrementingKey){
+      var ref = parseInt(object[rootOptions.incrementingKey])
+      return padNumber(ref, 10) + ':' + object[rootOptions.primaryKey]
     } else {
-      return padNumber(0, 10) + ':' + object[options.primaryKey]
+      return padNumber(0, 10) + ':' + object[rootOptions.primaryKey]
     }
   }
 
-  options.matchers.forEach(function(matcher){
+  rootOptions.matchers.forEach(function(matcher){
     var paramifiedMatch = paramify(matcher.match)
     var map = getMapFromMatcher(matcher.ref, paramifiedMatch)
     db.map.add(map)
@@ -66,18 +66,17 @@ module.exports = function(db, options){
     views[matcher.ref] = map
   })
 
-
   contextDB.applyChange = function(object, changeInfo){
     changeInfo = changeInfo || {}
-    if (changeInfo.source != 'database' && changeInfo.source != 'server'){
+    if (changeInfo.source !== contextDB){
 
-      if (options.incrementingKey){
-        if (!object[options.incrementingKey]){
-          object[options.incrementingKey] = incrementKey()
+      if (rootOptions.incrementingKey){
+        if (!object[rootOptions.incrementingKey]){
+          object[rootOptions.incrementingKey] = incrementKey()
         }
       }
 
-      if (options.timestamps){
+      if (rootOptions.timestamps){
         object.updated_at = Date.now()
         object.created_at = object.created_at || Date.now()
         if (object._deleted){
@@ -98,7 +97,7 @@ module.exports = function(db, options){
 
   contextDB.generate = function(options, callback){
 
-    var params = options.params || {}
+    var data = options.data || {}
     var matcherRefs = options.matcherRefs || []
 
     try {
@@ -112,7 +111,7 @@ module.exports = function(db, options){
       return callback(ex)
     }
 
-    var context = jsonContext(params, {matchers: matchers, dataFilters: dataFilters})
+    var context = JsonContext({matchers: matchers, dataFilters: dataFilters, data: data})
     var contextListeners = {}
 
     var streams = []
@@ -127,28 +126,33 @@ module.exports = function(db, options){
     }
 
     context.emitChangesSince = function(timestamp){
-      if (options.timestamps){
+
+      if (rootOptions.timestamps){
+
         context.matchers.forEach(function(matcher){
+
           if (matcher.collection){
 
-            matcherStream(matcher.ref, context).on('data', function(data){
+            matcherStream(matcher.ref, context, {tail: false}).on('data', function(data){
               if (!data.updated_at || data.updated_at > timestamp){
                 context.emit('change', data.value, {
                   matcher: matcher, 
-                  source: 'database', 
-                  seq: data.updated_at || Date.now()
+                  source: contextDB,
+                  verfiedChange: true,
+                  time: data.updated_at || Date.now()
                 })
               }
-            }).once('sync', closeThis)
+            })
 
-            deletedStream(matcher.ref, context, timestamp).on('data', function(data){
+            deletedStream(matcher.ref, context, timestamp, {tail: false}).on('data', function(data){
               context.emit('change', data.value, {
-                source: 'database', 
+                source: contextDB, 
                 action: 'remove', 
+                verifiedChange: true,
                 matcher: matcher,
-                seq: data.deleted_at || Date.now()
+                time: data.deleted_at || Date.now()
               })
-            }).once('sync', closeThis)
+            })
 
           }
         })
@@ -161,7 +165,8 @@ module.exports = function(db, options){
         var object = data.value || deleted.get(key)
 
         if (object){
-          context.pushChange(object, {matcher: matcher, source: 'database'})
+          var time = object._deleted ? object.deleted_at : object.updated_at
+          context.pushChange(object, {matcher: matcher, source: contextDB, verifiedChange: true, time: time})
         }
         
       }).once('sync', function(){
@@ -169,8 +174,10 @@ module.exports = function(db, options){
       }))
 
     }, function(err){ if(err)return callback&&callback(err)
-      context.on('change', contextDB.applyChange)
-      callback(null, context)
+      process.nextTick(function(){
+        context.on('change', contextDB.applyChange)
+        callback(null, context)
+      })
     })
   }
 
@@ -182,7 +189,8 @@ module.exports = function(db, options){
   function deletedStream(matcherRef, context, since, options){
     var params = getParamsFrom(matcherParamLookup[matcherRef], context).concat('DEL')
     var startParams = params.concat(alphaKey(since), '')
-    var endParams = params.concat('~', '~')
+    var endParams = params.concat(alphaKey(Date.now()+100), '')
+
     return db.map.view(mergeClone(options, {name: matcherRef, start: startParams, end: endParams}))
   }
 
@@ -225,7 +233,7 @@ function getMapFromMatcher(name, paramifiedMatch){
     map: function(key, value, emit){
       if (Object.keys(paramifiedMatch.ensure).length === 0 || checkFilter(value, paramifiedMatch.ensure, {match: 'filter'})){
         var newKey = paramifiedMatch.params.map(function(param){
-          return value[param.key]
+          return value[param.key] || null
         })
         if (value._deleted){
           newKey.push('DEL')
@@ -235,10 +243,6 @@ function getMapFromMatcher(name, paramifiedMatch){
       }
     }
   }
-}
-
-function closeThis(){
-  this.destroy()
 }
 
 function padNumber(number, pad) {
