@@ -3,6 +3,12 @@ ContextDB - JSON Context for LevelDB
 
 This module creates instances of [**JsonContext**](https://github.com/mmckegg/json-context) from a leveldb database using [levelup](https://github.com/rvagg/node-levelup). Datasources are automatically generated from matchers and watch for realtime changes.
 
+## Installation
+
+```shell
+$ npm install contextdb
+```
+
 ## API
 
 ### require('level-json-context')(db, options)
