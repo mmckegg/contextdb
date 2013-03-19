@@ -1,6 +1,6 @@
 {
   "name": "contextdb",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Use json-context with leveldb. Contexts are automatically generated from matchers, and provides ability to watch matchers for realtime notifications.",
   "main": "index.js",
   "scripts": {
