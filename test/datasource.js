@@ -49,14 +49,14 @@ rimraf(testPath, function(){
       description: "Item 2"
     }
 
-    contextDB.applyChange(site1)
-    contextDB.applyChange(site2)
-
-    setTimeout(function(){
+    contextDB.applyChanges([site1, site2], function(){
       contextDB.generate({
         data: {site_id: site1.id},
         matcherRefs: ['site', 'items']
       }, function(err, datasource){
+
+        if (err) throw err
+
         t.deepEqual(datasource.data.site, site1, "check return site 1 matches applied")
         datasource.on('change', function(object, changeInfo){
           t.deepEqual(datasource.data.items[0], item1, "check item 1 emitted after context created")
@@ -74,7 +74,7 @@ rimraf(testPath, function(){
         })
         contextDB.applyChange(item2)
       })
-    }, 110)
+    })
 
   })
 
@@ -95,11 +95,8 @@ rimraf(testPath, function(){
       description: "Item 2"
     }
 
-    contextDB.applyChange(site)
-    contextDB.applyChange(item1)
-    contextDB.applyChange(item2)
+    contextDB.applyChanges([site, item1, item2], function(){
 
-    setTimeout(function(){
       contextDB.generate({
         data: {site_id: site.id},
         matcherRefs: ['site', 'items']
@@ -137,9 +134,9 @@ rimraf(testPath, function(){
           datasource1.pushChange(changedItem1, {verifiedChange: true})
           datasource2.pushChange(changedItem2, {verifiedChange: true})
         })
-
       })
-    }, 110)
+
+    })
   })
 
   test("Changes since", function(t){
@@ -160,11 +157,7 @@ rimraf(testPath, function(){
       description: "Item 2"
     }
 
-    contextDB.applyChange(site)
-    contextDB.applyChange(item1)
-    contextDB.applyChange(item2)
-
-    setTimeout(function(){
+    contextDB.applyChanges([site, item1, item2], function(){
 
       contextDB.generate({
         data: {site_id: site.id},
@@ -184,12 +177,7 @@ rimraf(testPath, function(){
           description: "New Item 3"
         }
 
-        contextDB.applyChange(changedItem1)
-        contextDB.applyChange(deletedItem2)
-        contextDB.applyChange(newItem3)
-
-        setTimeout(function(){
-
+        contextDB.applyChanges([changedItem1, deletedItem2, newItem3], function(){
           t.deepEqual(offlineDatasource.data, {
             site: site,
             site_id: site.id,
@@ -209,12 +197,12 @@ rimraf(testPath, function(){
               site_id: site.id,
               items: [changedItem1, newItem3]
             }, "check changes from past made")
-          }, 100)
-
-        }, 110)
+          }, 50)
+        })
 
       })
-    }, 110)
+
+    })
 
   })
 
