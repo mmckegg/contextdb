@@ -36,7 +36,7 @@ var contextDB = ContextDB(db, {
       item: 'items[id={.id}]',
       collection: 'items',
       match: {
-        parent_id: {$param: 'parent_id'},
+        parentId: {$query: 'parentId'},
         type: 'comment'
       },
       allow: {
@@ -55,7 +55,7 @@ var contextDB = ContextDB(db, {
 })
 ```
 
-### contextDB.applyChange(object)
+### contextDB.applyChange(object, cb)
 
 Push objects into the database. This will also notify all relevant datasources listening. 
 
@@ -64,7 +64,7 @@ All changes will be accepted so this should only be triggered by trusted sources
 ```js
 var newObject = {
   id: 1,
-  parent_id: 'site',
+  parentId: 'site',
   name: "Home",
   type: 'page'
 }
@@ -72,6 +72,13 @@ var newObject = {
 contextDB.applyChange(newObject)
 ```
 
+### contextDB.applyChanges(arrayOfObjects, cb)
+
+Batch version of `applyChange`.
+
+### contextDB.forceIndex()
+
+Forces the database to reindex all the matchers. Could take some time depending on how many items there are in the DB. **This is automatically run if you change the `match` portion of any matcher**.
 
 ### contextDB.generate(options, callback(err, datasource))
 
@@ -83,7 +90,7 @@ Changes pushed in using [`datasource.pushChange`](https://github.com/mmckegg/jso
 
 Options:
 
-- **data**: The starting point for the datasource. Matchers can use $query to hook into the specified attributes.
+- **data**: The starting point for the datasource. Matchers should use $query to hook into the specified attributes.
 - **matcherRefs**: An array of refs from the matchers specified when creating the contextDB. This option is order sensitive as matchers can refer to the result of another matcher.
 
 ### datasource.emitChangesSince(timestamp)
@@ -93,7 +100,7 @@ Will cause the datasource to emit all changes to any listeners that have occured
 ## Example
 
 ```js
-var params = {parent_id: 1, user_id: 'user_123', token: 'some_unique_random_string'}
+var params = {parentId: 1, userId: 'user_123', token: 'some_unique_random_string'}
 var matcherRefs = ['current_user', 'items_for_parent']
 
 var userDatasources = {}
