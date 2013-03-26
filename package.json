@@ -18,13 +18,19 @@
   "peerDependencies": {
     "levelup": "~0.6.2"
   },
+  "devDependencies": {
+    "levelup": "*",
+    "tap": "*"
+  },
   "keywords": [
     "realtime",
     "templates",
     "data binding",
+    "json",
     "query",
     "leveldb",
     "levelup",
+    "match",
     "map"
   ],
   "author": "Matt McKegg",
