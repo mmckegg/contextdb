@@ -1,10 +1,9 @@
 var JsonContext = require('json-context')
 var SubLevel  = require('level-sublevel')
-var MatchMap = require('./match_map')
+var MatchMap = require('level-match-map')
 var TimeoutMap = require('./timeout-map')
 var EventEmitter = require("events").EventEmitter
 
-var checkFilter = require('json-filter')
 var async = require('async')
 
 
@@ -71,6 +70,8 @@ module.exports = function(levelDB, options){
 
   // batch version
   self.applyChanges = function(objects, changeInfo, cb){
+
+    console.log(objects)
 
     if (typeof changeInfo === 'function'){
       cb = changeInfo
@@ -148,7 +149,7 @@ module.exports = function(levelDB, options){
     context.getChanges = function(cb){
       var result = []
       async.eachSeries(context.matchers, function(matcher, next){
-        matchDb.createMatchStream(matcher.ref, context, {tail: false}).on('data', function(data){
+        matchDb.createMatchStream(matcher.ref, {tail: false, queryHandler: context.get}).on('data', function(data){
           result.push(data.value)
         }).on('end', next).on('error', next)
       }, function(err){
@@ -163,7 +164,10 @@ module.exports = function(levelDB, options){
 
         context.matchers.forEach(function(matcher){
 
-          matchDb.createMatchStream(matcher.ref, context, {tail: false}).on('data', function(data){
+          matchDb.createMatchStream(matcher.ref, {
+            tail: false, 
+            queryHandler: context.get
+          }).on('data', function(data){
             if (!data.updated_at || data.updated_at > timestamp){
               context.emit('change', data.value, {
                 matcher: matcher, 
@@ -174,7 +178,11 @@ module.exports = function(levelDB, options){
             }
           })
 
-          matchDb.createMatchStream(matcher.ref, context, {tail: false, deletedSince: timestamp}).on('data', function(data){
+          matchDb.createMatchStream(matcher.ref, {
+            tail: false, 
+            deletedSince: timestamp, 
+            queryHandler: context.get
+          }).on('data', function(data){
             context.emit('change', data.value, {
               source: self, 
               action: 'remove', 
@@ -188,7 +196,9 @@ module.exports = function(levelDB, options){
     }
 
     async.eachSeries(matchers, function(matcher, next){
-      streams.push(matchDb.createMatchStream(matcher.ref, context).on('data', function(data){
+      streams.push(matchDb.createMatchStream(matcher.ref, {
+        queryHandler: context.get
+      }).on('data', function(data){
         var object = data.value
         if (!object){
           var split = data.key.split('~')
@@ -220,7 +230,10 @@ module.exports = function(levelDB, options){
     var context = JsonContext({data: params, dataFilters: dataFilters})
     var result = []
 
-    matchDb.createMatchStream(matcherRef, context, {tail: false}).on('data', function(data){
+    matchDb.createMatchStream(matcherRef, {
+      tail: false, queryHandler: 
+      context.get
+    }).on('data', function(data){
       result.push(data.value)
     }).on('end', function(){
       cb(null, result)
