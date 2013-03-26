@@ -206,6 +206,66 @@ rimraf(testPath, function(){
 
   })
 
+  test("delete change", function(t){
+    t.plan(3)
+
+    var site = { id: 'apply-site-1', type: 'site', name: "Cool Site 1" }
+    var item1 = {
+      id: 'apply-item-1',
+      type: 'item',
+      site_id: site.id,
+      description: "Item 1"
+    }
+    var item2 = {
+      id: 'apply-item-2',
+      type: 'item',
+      site_id: site.id,
+      description: "Item 2"
+    }
+
+    contextDB.applyChanges([site, item1, item2], function(){
+      contextDB.generate({
+        data: {site_id: site.id},
+        matcherRefs: ['site', 'items']
+      }, function(err, datasource){
+
+        if (err) throw err
+
+        t.deepEqual(datasource.data, {
+          site: site,
+          items: [item1, item2],
+          site_id: site.id
+        }, "check initial state")
+
+        var deletedItem2 = mergeClone(item2, {_deleted: true})
+        datasource.pushChange(deletedItem2, {verifiedChange: true})
+
+        t.deepEqual(datasource.data, {
+          site: site,
+          items: [item1],
+          site_id: site.id
+        }, "check for immediate delete")
+
+        contextDB.applyChange(item1)
+      })
+
+      setTimeout(function(){
+        contextDB.generate({
+          data: {site_id: site.id},
+          matcherRefs: ['site', 'items']
+        }, function(err, datasource){
+          t.deepEqual(datasource.data, {
+            site: site,
+            items: [item1],
+            site_id: site.id
+          }, "check for still deleted on reload")
+        })
+      }, 20)
+
+    })
+
+  })
+
 })
 
 function mergeClone(){
