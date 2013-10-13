@@ -5,6 +5,7 @@ var TimeoutMap = require('./lib/timeout-map')
 var EventEmitter = require("events").EventEmitter
 
 module.exports = function(levelDB, options){
+  // options: matchers, dataFilters, primaryKey, incrementingKey
 
   var rootOptions = options || {}
 
