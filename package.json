@@ -11,15 +11,15 @@
     "url": "https://github.com/mmckegg/contextdb.git"
   },
   "dependencies": {
-    "json-context": "~0.2.2",
-    "level-sublevel": "~4.0.2",
-    "level-match-map": "~0.1"
-  },
-  "peerDependencies": {
-    "levelup": "~0.6.2"
+    "json-context": "*",
+    "json-filter": "*",
+    "level-sublevel": "*",
+    "level-post": "*",
+    "through": "*"
   },
   "devDependencies": {
-    "levelup": "*",
+    "level": "*",
+    "rimraf": "*",
     "tap": "*"
   },
   "keywords": [

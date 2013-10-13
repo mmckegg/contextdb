@@ -1,11 +1,8 @@
 var JsonContext = require('json-context')
 var SubLevel  = require('level-sublevel')
-var MatchMap = require('level-match-map')
-var TimeoutMap = require('./timeout-map')
+var Matcher = require('./lib/matcher')
+var TimeoutMap = require('./lib/timeout-map')
 var EventEmitter = require("events").EventEmitter
-
-var async = require('async')
-
 
 module.exports = function(levelDB, options){
 
@@ -25,13 +22,17 @@ module.exports = function(levelDB, options){
 
   var db = SubLevel(levelDB)
   var metaDB = db.sublevel('meta')
-  var matchDb = MatchMap(db, rootOptions.matchers)
+  var matchDb = Matcher(db, rootOptions.matchers)
 
   var self = new EventEmitter()
   self.db = db
 
   matchDb.on('reindex', function(){
     self.emit('reindex')
+  })
+
+  matchDb.on('indexed', function(){
+    self.emit('indexed')
   })
 
   // incrementing values
@@ -71,8 +72,6 @@ module.exports = function(levelDB, options){
   // batch version
   self.applyChanges = function(objects, changeInfo, cb){
 
-    console.log(objects)
-
     if (typeof changeInfo === 'function'){
       cb = changeInfo
       changeInfo = {}
@@ -106,7 +105,11 @@ module.exports = function(levelDB, options){
           return {type: 'put', key: key, value: object}
         })
 
-        db.batch(changes, cb)
+
+        db.batch(changes, function(err){
+          if(err) return cb&&cb(err)
+          matchDb.index(changes, cb)
+        })
 
       } catch (ex){
         cb&&cb(ex)
@@ -135,11 +138,11 @@ module.exports = function(levelDB, options){
     var context = JsonContext({matchers: matchers, dataFilters: dataFilters, data: data})
     var contextListeners = {}
 
-    var streams = []
+    var aborts = []
 
     context.destroy = function(){
-      streams.forEach(function(stream){
-        stream.destroy()
+      aborts.forEach(function(abort){
+        abort()
       })
       contextListeners = null
       context.emit('end')
@@ -148,8 +151,8 @@ module.exports = function(levelDB, options){
 
     context.getChanges = function(cb){
       var result = []
-      async.eachSeries(context.matchers, function(matcher, next){
-        matchDb.createMatchStream(matcher.ref, {tail: false, queryHandler: context.get}).on('data', function(data){
+      forEach(context.matchers, function(matcher, next){
+        matchDb.createMatchStream(matcher.ref, {queryHandler: context.get}).on('data', function(data){
           result.push(data.value)
         }).on('end', next).on('error', next)
       }, function(err){
@@ -165,7 +168,6 @@ module.exports = function(levelDB, options){
         context.matchers.forEach(function(matcher){
 
           matchDb.createMatchStream(matcher.ref, {
-            tail: false, 
             queryHandler: context.get
           }).on('data', function(data){
             if (!data.updated_at || data.updated_at > timestamp){
@@ -179,7 +181,6 @@ module.exports = function(levelDB, options){
           })
 
           matchDb.createMatchStream(matcher.ref, {
-            tail: false, 
             deletedSince: timestamp, 
             queryHandler: context.get
           }).on('data', function(data){
@@ -195,8 +196,10 @@ module.exports = function(levelDB, options){
       }
     }
 
-    async.eachSeries(matchers, function(matcher, next){
-      streams.push(matchDb.createMatchStream(matcher.ref, {
+    forEach(matchers, function(matcher, next){    
+
+      matchDb.createMatchStream(matcher.ref, {
+        tail: true,
         queryHandler: context.get
       }).on('data', function(data){
         var object = data.value
@@ -208,18 +211,19 @@ module.exports = function(levelDB, options){
         if (object){
           var time = object._deleted ? object.deleted_at : object.updated_at
           context.pushChange(object, {matcher: matcher, source: self, verifiedChange: true, time: time})
-        }
-              
-      }).once('sync', function(){
-        next()
-      }))
+        }      
+      }).once('sync', next)
 
-    }, function(err){ if(err)return callback&&callback(err)
+    }, function(err){ 
+
+      if (err) return callback&&callback(err)
+      
       process.nextTick(function(){
         context.on('change', self.applyChange)
         context.emit('sync')
         callback&&callback(null, context)
       })
+
     })
 
     return context
@@ -231,8 +235,7 @@ module.exports = function(levelDB, options){
     var result = []
 
     matchDb.createMatchStream(matcherRef, {
-      tail: false, queryHandler: 
-      context.get
+      queryHandler: context.get
     }).on('data', function(data){
       result.push(data.value)
     }).on('end', function(){
@@ -262,4 +265,18 @@ function mergeClone(){
     }
   }
   return result
+}
+
+function forEach(array, fn, cb){
+  var i = -1
+  function next(err){
+    if (err) return cb&&cb(err)
+    i += 1
+    if (i<array.length){
+      fn(array[i], next, i)
+    } else {
+      cb&&cb(null)
+    }
+  }
+  next()
 }

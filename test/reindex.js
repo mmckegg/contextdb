@@ -1,5 +1,5 @@
 var test = require('tap').test
-var LevelDB = require('levelup')
+var LevelDB = require('level')
 var ContextDB = require('../')
 var JsonContext = require('json-context')
 var rimraf = require('rimraf')
@@ -9,7 +9,7 @@ rimraf(testPath, function(){
 
   test('database reindex when matchers change', function(t){
 
-    t.plan(4)
+    t.plan(5)
 
     var site = {id: 'site-1', type: 'site', name: "test 1234"}
 
@@ -27,7 +27,7 @@ rimraf(testPath, function(){
     ]
 
     var db = LevelDB(testPath, {
-      encoding: 'json'
+      valueEncoding: 'json'
     }, function(){
       var contextDB = ContextDB(db, {
         matchers: originalMatchers
@@ -66,7 +66,7 @@ rimraf(testPath, function(){
     function secondDatabase(){
 
       var db = LevelDB(testPath, {
-        encoding: 'json'
+        valueEncoding: 'json'
       }, function(){
         var contextDB = ContextDB(db, {
           matchers: changedMatchers
@@ -76,24 +76,30 @@ rimraf(testPath, function(){
           t.ok(true, 'reindex event emitted')
         })
 
-        contextDB.generate({
-          data: {site_id: site.id},
-          matcherRefs: ['changed-site', 'now-accessible']
-        }, function(err, datasource){
+        contextDB.once('indexed', function(){
 
-          if (err) throw err
+          t.ok(true, 'index completed')
 
-          t.deepEqual(datasource.data, {site_id: site.id, changedSite: site, accessible: inaccessibleObject}, "item was reindexed, and second item now matched")
-          datasource.destroy()
-          db.close(thirdDatabase)
+          contextDB.generate({
+            data: {site_id: site.id},
+            matcherRefs: ['changed-site', 'now-accessible']
+          }, function(err, datasource){
+
+            if (err) throw err
+
+            t.deepEqual(datasource.data, {site_id: site.id, changedSite: site, accessible: inaccessibleObject}, "item was reindexed, and second item now matched")
+            datasource.destroy()
+            db.close(thirdDatabase)
+          })
         })
+
       })
     }
 
     function thirdDatabase(){
 
       var db = LevelDB(testPath, {
-        encoding: 'json'
+        valueEncoding: 'json'
       })
 
       var contextDB = ContextDB(db, {

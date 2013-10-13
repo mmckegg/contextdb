@@ -13,44 +13,42 @@ $ npm install contextdb
 
 ### require('level-json-context')(db, options)
 
-Pass in an instance of a [levelup database](https://github.com/rvagg/node-levelup) and specify matchers. Ensure the database has `encoding: 'json'`. Returns an instance of *contextDB*
+Pass in an instance of a [levelup database](https://github.com/rvagg/node-levelup) and specify matchers. Ensure the database has `valueEncoding: 'json'`. Returns an instance of *contextDB*
 
 Options:
 
-- **matchers**: Route changes into the correct places, and provide building blocks for page contexts. In addition to the [matcher options on JSON Context](https://github.com/mmckegg/json-context#matchers), you need to specify `matcher.ref` as well. Use `ref` to refer to this matcher later when building contexts. Placeholders can be specified anywhere in the matcher filter by using `{$param: 'queryToGetData'}`
+- **matchers**: Object containing named matchers. See [matcher options on JSON Context](https://github.com/mmckegg/json-context#matchers) for all options. Placeholders can be specified anywhere in the matcher filter by using `{$query: 'queryToGetData'}`
 - **primaryKey**: Choose the object key to use as the primary index. Defaults to `'id'`. 
 - **incrementingKey**: (defaults to '_seq') Add an incrementing ID to objects
 - **timestamps**: (defaults to `true`) whether to automatically add timestamps to edited objects `created_at`, `updated_at`, `deleted_at`. Required if using `datasource.emitChangesSince`.
 
 ```js
-var LevelDB = require('levelup')
+var LevelDB = require('level')
 var ContextDB = require('contextdb')
 
 var db = LevelDB(__dirname + '/test-db', {
-  encoding: 'json'
+  valueEncoding: 'json'
 })
 
 var contextDB = ContextDB(db, {
-  matchers: [
-    { ref: 'items_for_parent',
+  matchers: {
+    'items_for_parent': { 
       item: 'items[id={.id}]',
       collection: 'items',
       match: {
         parentId: {$query: 'parentId'},
         type: 'comment'
       },
-      allow: {
-        change: true
-      }
+      allow: { change: true }
     },
-    { ref: 'current_user',
+    'current_user': {
       item: 'user',
       match: {
         type: 'user',
         id: 'user_123'
       }
     }
-  ],
+  },
   primaryKey: 'id'
 })
 ```

@@ -1,5 +1,5 @@
 var test = require('tap').test
-var LevelDB = require('levelup')
+var LevelDB = require('level')
 var ContextDB = require('../')
 var JsonContext = require('json-context')
 var rimraf = require('rimraf')
@@ -8,26 +8,26 @@ var testPath = __dirname + '/test-db'
 rimraf(testPath, function(){
 
   var db = LevelDB(testPath, {
-    encoding: 'json'
+    valueEncoding: 'json'
   })
 
   var contextDB = ContextDB(db, {
-    matchers: [
-      { ref: 'items', 
-        collection: 'items', 
-        item: 'items[id={.id}]', match: {
+    matchers: {
+      'items': {
+        collection: 'items', item: 'items[id={.id}]', 
+        match: {
           type: 'item',
           site_id: {$query: 'site_id'}
         }
       },
-      { ref: 'site', 
+      'site': {
         item: 'site', 
         match: {
           type: 'site',
           id: {$query: 'site_id'}
         }
       }
-    ]
+    }
   })
 
   test('Apply direct changes', function(t){
@@ -50,6 +50,7 @@ rimraf(testPath, function(){
     }
 
     contextDB.applyChanges([site1, site2], function(){
+
       contextDB.generate({
         data: {site_id: site1.id},
         matcherRefs: ['site', 'items']
@@ -64,16 +65,21 @@ rimraf(testPath, function(){
         contextDB.applyChange(item1)
       })
 
+
       contextDB.generate({
         data: {site_id: site2.id},
         matcherRefs: ['site', 'items']
       }, function(err, datasource){
+
+        if (err) throw err
+
         t.deepEqual(datasource.data.site, site2, "check return site 2 matches applied")
         datasource.on('change', function(object, changeInfo){
           t.deepEqual(datasource.data.items[0], item2, "check item 2 emitted after context created")
         })
         contextDB.applyChange(item2)
       })
+
     })
 
   })
